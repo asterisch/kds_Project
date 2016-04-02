@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-g -Wall
-OBJ=generator.o examine.o
+EXE=generator examine
 all: generate examine
 
 generate: generator.o
@@ -18,4 +18,4 @@ examine.o: src/examine.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm *.o datafile.txt generator examine
+	rm *.o datafile.txt $(EXE)
