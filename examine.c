@@ -37,12 +37,12 @@ void calc_time(struct timespec start, struct timespec end)
 		interval_nsec += 1000000000;
 		interval_sec--;
 	}
-	printf("[+] Main part of the program was being executed for ::%ld.%06ld:: sec)\n", interval_sec, interval_nsec);
+	printf("[+] Main part of the program was being executed for :: %ld.%06ld :: sec)\n", interval_sec, interval_nsec);
 }
 
 int main(int argc,char * argv[])
 {
-	if (check_input(argc,argv)==1)
+	if (check_input(argc,argv)==1)			// Simple argument number checking
 	{
 		return 1;
 	}
@@ -56,12 +56,12 @@ int main(int argc,char * argv[])
 	int proc_num = atoi(argv[5]);			// the desired output
 	float coords_val[3] = {0, 0, 0};
 	
-	FILE *input = check_input_file(argv[3]);
+	FILE *input = check_input_file(argv[3]);	// File opening check
 	if  (!input)
 	{
 		return 1;
 	}
-	clock_gettime(CLOCK_MONOTONIC, &start);
+	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
 	while(fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]) != EOF)		// The main loop of the program
 	{
 		if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
@@ -69,16 +69,16 @@ int main(int argc,char * argv[])
 			coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
 		}
 		coords_total++;					// Update the total number of coordinates read
-		if(coords_total == coll)
-		{
-			break;
+		if(coords_total == coll)		// If the max number of collisions/coord check specified in the arguments is the same as the current
+		{								// coords that have been read, stop the file reading and show the results.
+			break;						// (Note that if -1 is specified, this check is redundant)
 		}
 	}
-	clock_gettime(CLOCK_MONOTONIC, &end);
-	calc_time(start, end);
+	clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer 
+	calc_time(start, end);						// Calculate the time elapsed
 	printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n", coords_total, coords_within_lim);
 
-	fclose(input);
+	fclose(input);						// Close the file
 	printf("[+] Done! \n" );
 
 	return 0;
