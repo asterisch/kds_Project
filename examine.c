@@ -26,10 +26,30 @@ FILE *check_input_file(char *filename)
 		return NULL;
 	}
 	return temp;
-} 
+}
+
+int calc_time(struct timespec start, struct timespec end)
+{
+	long interval_sec = end.tv_sec - start.tv_sec;
+	long interval_nsec = end.tv_nsec - start.tv_nsec;
+	if(interval_nsec < 0)
+	{
+		interval_nsec += 1000000000;
+		interval_sec--;
+	}
+	printf("Main part of the program was being executed for :%ld.%06ld: sec)\n", interval_sec, interval_nsec);
+}
 
 int main(int argc,char * argv[])
 {
+	struct timespec start, end;				// Initialize
+	int coords_within_lim = 0;				// vars needed for
+	int coords_total = 0;					// program configuration						
+	int coll = atoi(argv[1]);				// and basic 
+	int runtime = atoi(argv[2]);			// calculations			
+	int threads_num = atoi(argv[4]);		// in order to get			   
+	int proc_num = atoi(argv[5]);			// the desired output
+
 	if (check_input(argc,argv)==1)
 	{
 		return 1;
@@ -39,8 +59,14 @@ int main(int argc,char * argv[])
 	{
 		return 1;
 	}
-	int coll=atoi(argv[1]);											//,etime=argv[2],threads=argv[4],proc=argv[5];
+	if(coll == -1)
+	{
+		coll = EOF;
+	}
+	clock_get_time(CLOCK_MONOTONIC, &start);
+	clock_get_time(CLOCK_MONOTONIC, &end);
 	fclose(input);
 	printf("[+]Done! \n" );
+
 	return 0;
 }
