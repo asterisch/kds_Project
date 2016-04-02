@@ -28,7 +28,7 @@ FILE *check_input_file(char *filename)
 	return temp;
 }
 
-int calc_time(struct timespec start, struct timespec end)
+void calc_time(struct timespec start, struct timespec end)
 {
 	long interval_sec = end.tv_sec - start.tv_sec;
 	long interval_nsec = end.tv_nsec - start.tv_nsec;
@@ -49,6 +49,7 @@ int main(int argc,char * argv[])
 	int runtime = atoi(argv[2]);			// calculations			
 	int threads_num = atoi(argv[4]);		// in order to get			   
 	int proc_num = atoi(argv[5]);			// the desired output
+	int coords_val[3] = {0, 0, 0};
 
 	if (check_input(argc,argv)==1)
 	{
@@ -59,12 +60,18 @@ int main(int argc,char * argv[])
 	{
 		return 1;
 	}
-	if(coll == -1)
-	{
-		coll = EOF;
-	}
 	clock_get_time(CLOCK_MONOTONIC, &start);
+	while(fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]) != EOF)		// The main loop of the program
+	{
+		if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
+		{
+			coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+		}
+		coords_total++;					// Update the total number of coordinates read
+	}
 	clock_get_time(CLOCK_MONOTONIC, &end);
+	calc_time(start, end);
+
 	fclose(input);
 	printf("[+]Done! \n" );
 
