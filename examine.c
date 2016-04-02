@@ -2,6 +2,10 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define MIN_LIM 12
+#define MAX_LIM 30
+
 int check_input(int argc,char *argv[])
 {
   //If input arguments are not as much as meant to be, the algorithm ends indicating it's usage.
@@ -13,6 +17,7 @@ int check_input(int argc,char *argv[])
   }
   return 0;
 }
+
 FILE *check_input_file(char *filename)
 {
    FILE *temp = fopen(filename,"r");
@@ -22,7 +27,8 @@ FILE *check_input_file(char *filename)
      return NULL;
    }
    return temp;
-}
+} 
+
 int main(int argc,char * argv[])
 {
   if (check_input(argc,argv)==1) return 1;
