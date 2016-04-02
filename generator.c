@@ -21,7 +21,7 @@ FILE *create_file(char *argv1)
     {
 		do
 		{
-			printf("[!]Warning :File \"%s\" already exists.\nOverwrite? (y/n):",argv1);
+			printf("[!] Warning: File \"%s\" already exists.\nOverwrite? (y/n): ",argv1);
 			overwrite=getc(stdin);
 		}while (overwrite!='y' && overwrite!='n');
 		fclose(fp);
@@ -61,9 +61,9 @@ int main(int argc,char *argv[])
 		printf("Nothing to write..\nExiting...\n");
 		return 1;
 	}
-	printf("[-]Working...\n");
+	printf("[-] Working...\n");
 	write_matrix(file,nocords);				// Write matrix to file
 	fclose(file);
-	printf("[+]Done! \n" );
+	printf("[+] Done! \n" );
 	return 0;
 }
