@@ -40,12 +40,12 @@ void write_matrix(FILE *out,unsigned int coords)
 	unsigned int count,j;
 	ltime=time(NULL);
 	utime= (unsigned int) ltime/2;
-	srand(utime);	
+	srand(utime);
 	for (count=0;count<coords;count++)
 	{
 		for (j=0;j<3;j++)
 		{
-			fprintf(out, "%.6f ", (float) 34*rand() / (RAND_MAX-1 ) );
+			fprintf(out, "%09.6f ", (float) 34*rand() / (RAND_MAX-1 ) );
 		}
 		fprintf(out,"\n");
 	}
