@@ -48,19 +48,43 @@ int main(int argc,char * argv[])
 
 	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
 	int i;
-	#pragma omp parallel shared(loop_count, input) private(i, coords_val)
+
+	if(threads_num != -1)
 	{
-		#pragma omp for schedule(dynamic) 
+		if(threads_num > omp_get_max_threads())
+		{
+			printf("[!] Warning: Specified threads exceed the number of available ones\n");
+			printf("[!] Setting the number of threads to the maximum available");
+			omp_set_dynamic(0);
+			omp_set_num_threads(omp_get_max_threads());
+		}
+		else
+		{
+			omp_set_num_threads(threads_num);
+		}
+	}
+	else
+	{
+		omp_set_num_threads(threads_num);
+	}
+	omp_nest_lock_t lock;		// Use a lock in order to protect the I/O array and make it a shared var
+	omp_init_nest_lock(&lock);
+	#pragma omp parallel shared(loop_count, coords_within_lim, input, coords_val) private(i)
+	{
+		#pragma omp for schedule(dynamic) reduction(+:coords_within_lim) 
 		for(i=0; i<loop_count; i++)					// The main loop of the program
 		{
+			omp_set_nest_lock(&lock);
 			fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
 			if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
 			{
 				#pragma omp atomic
 				coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
 			}
-		}
+			omp_unset_nest_lock(&lock);
+		}			// Implicit barrier
 	}
+	omp_destroy_nest_lock(&lock);
 	clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer 
 	time_elapsed = calc_time(start, end, 1);	// Calculate the time elapsed
 	printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, coords_within_lim, loop_count/time_elapsed);
