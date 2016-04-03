@@ -8,7 +8,7 @@ generate: generator.o
 	./generator datafile.txt 15000000
 
 examine: examine.o
-	$(CC) $(CFLAGS) -fopenmp src/examine.c -o examine
+	$(CC) $(CFLAGS) -fopenmp src/examine_omp.c -o examine
 	./examine -1 -1 datafile.txt -1 -1
 
 generator.o: src/generator.c
