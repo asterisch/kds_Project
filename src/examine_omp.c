@@ -2,6 +2,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <omp.h>
 
 #define MIN_LIM 12.0
 #define MAX_LIM 30.0
@@ -47,12 +48,17 @@ int main(int argc,char * argv[])
 
 	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
 	int i;
-	for(i=0; i<loop_count; i++)					// The main loop of the program
+	#pragma omp parallel shared(loop_count, input) private(i, coords_val)
 	{
-		fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
-		if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
+		#pragma omp for schedule(dynamic) 
+		for(i=0; i<loop_count; i++)					// The main loop of the program
 		{
-			coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+			fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
+			if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
+			{
+				#pragma omp atomic
+				coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+			}
 		}
 	}
 	clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer 
