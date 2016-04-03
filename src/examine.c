@@ -16,14 +16,16 @@ int main(int argc,char * argv[])
 
 	struct timespec start, end;				// Initialize
 	long coords_within_lim = 0;				// vars needed for
-	long coords_total = 0;					// program configuration						
-	int coll = atoi(argv[1]);				// and basic 
-	int runtime = atoi(argv[2]);			// calculations			
-	char *file = argv[3];
+	int coll = atoi(argv[1]);				// configuration 
+	int runtime = atoi(argv[2]);			// and basic		
+	char *file = argv[3];					// calculations
 	int threads_num = atoi(argv[4]);		// in order to get			   
 	int proc_num = atoi(argv[5]);			// the desired output
 	float coords_val[3] = {0, 0, 0};
 	long time_elapsed = 0;
+	
+	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
+	
 	long loop_count = calc_lines(file);
 	if(coll != -1)
 	{
@@ -37,7 +39,6 @@ int main(int argc,char * argv[])
 			loop_count = coll;
 		}
 	}
-	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
 
 	FILE *input = fopen(file, "r");			// File opening
 	if(!input)
@@ -54,11 +55,10 @@ int main(int argc,char * argv[])
 		{
 			coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
 		}
-		coords_total++;					// Update the total number of coordinates read
 	}
 	clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer 
 	time_elapsed = calc_time(start, end, 1);	// Calculate the time elapsed
-	printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n", coords_total, coords_within_lim);
+	printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, coords_within_lim, loop_count/time_elapsed);
 
 	fclose(input);						// Close the file
 	printf("[+] Done! \n" );
