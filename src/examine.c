@@ -2,10 +2,10 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <mpi.h>
 #define MIN_LIM 12.0
 #define MAX_LIM 30.0
-
+#define LSIZE 31 //Fixed line size in bytes
 void check_input(int argc,char *argv[]);
 long calc_time(struct timespec start, struct timespec end, char print_flag);
 long calc_lines(char *filename);
@@ -13,18 +13,16 @@ long calc_lines(char *filename);
 int main(int argc,char * argv[])
 {
 	check_input(argc,argv);					// Simple argument number checking
-
-	struct timespec start, end;				// Initialize
-	long coords_within_lim = 0;				// vars needed for
-	int coll = atoi(argv[1]);				// configuration 
-	int runtime = atoi(argv[2]);			// and basic		
-	char *file = argv[3];					// calculations
-	int threads_num = atoi(argv[4]);		// in order to get			   
-	int proc_num = atoi(argv[5]);			// the desired output
-	float coords_val[3] = {0, 0, 0};
-	long time_elapsed = 0;
-	
+	int rank,agents,err=0;
+	long coords_total;
+	struct timespec start, end;				// Initialize vars needed for configuration
+	//int runtime = atoi(argv[2]);			// and basic calculations
+	//int threads_num = atoi(argv[4]);		// in order to get
+	char *file = argv[3];
+	//int proc_num = atoi(argv[5]);			// the desired output
 	long loop_count = calc_lines(file);
+	long time_elapsed = 0;
+	int coll = atoi(argv[1]);
 	if(coll != -1)
 	{
 		if(coll>loop_count)
@@ -37,32 +35,47 @@ int main(int argc,char * argv[])
 			loop_count = coll;
 		}
 	}
-
-	FILE *input = fopen(file, "r");			// File opening
-	if(!input)
-	{
-		printf("[!] Input file does not exist.\nExiting...\n");
-		exit(3);
-	}
-
 	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
-	int i;
-	for(i=0; i<loop_count; i++)					// The main loop of the program
+	if(!MPI_Init(&argc,&argv))
 	{
-		fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
-		if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
-		{
-			coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+			MPI_Comm_size(MPI_COMM_WORLD,&agents); // Initialize OpenMPI constants
+			MPI_Comm_rank(MPI_COMM_WORLD,&rank); // world size and rank numbers
+			long coords_within_lim = 0;
+			float coords_val[3] = {0, 0, 0};
+			FILE *input = fopen(file, "r");			// File desccriptor for every process
+			if(!input)
+			{
+				printf("[!] Input file does not exist.\nExiting...\n");
+				exit(3);
+			}
+			long loadperproc=loop_count/agents;							//Asign corresponding load at every process
+			fseek(input,rank*loadperproc*LSIZE,SEEK_SET);  //Move the file position indicator of every process
+			if(rank==agents-1) loadperproc+=(loop_count%agents); //Increment load of last process so as to reach end-of-file manually
+			int i;
+			for(i=0; i<loadperproc; i++)					// The main loop of the program
+			{
+				fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
+				if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
+				{
+					coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+				}
+			}
+			fclose(input); //Close file of every process
+			MPI_Reduce(&coords_within_lim,&coords_total,1,MPI_LONG,MPI_SUM,0,MPI_COMM_WORLD); //Sum all coordinates within limit of interest
+			if(rank==0)
+			{
+				clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer
+				time_elapsed = calc_time(start, end, 1);	// Calculate the time elapsed
+				printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, coords_total, loop_count/time_elapsed);
+				printf("[+] Done! \n" );
+			}
+			MPI_Finalize();
 		}
-	}
-	clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer 
-	time_elapsed = calc_time(start, end, 1);	// Calculate the time elapsed
-	printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, coords_within_lim, loop_count/time_elapsed);
-
-	fclose(input);						// Close the file
-	printf("[+] Done! \n" );
-
-	return 0;
+		else
+		{
+			MPI_Abort(MPI_COMM_WORLD,err); 		//Abort OMPI parallel operation
+		}
+			return 0;
 }
 
 void check_input(int argc,char *argv[])
