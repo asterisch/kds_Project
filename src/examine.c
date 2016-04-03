@@ -24,8 +24,6 @@ int main(int argc,char * argv[])
 	float coords_val[3] = {0, 0, 0};
 	long time_elapsed = 0;
 	
-	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
-	
 	long loop_count = calc_lines(file);
 	if(coll != -1)
 	{
@@ -47,6 +45,7 @@ int main(int argc,char * argv[])
 		exit(3);
 	}
 
+	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
 	int i;
 	for(i=0; i<loop_count; i++)					// The main loop of the program
 	{
