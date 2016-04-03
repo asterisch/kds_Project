@@ -6,43 +6,9 @@
 #define MIN_LIM 12.0
 #define MAX_LIM 30.0
 
-int check_input(int argc,char *argv[])
-{
-	if (argc<6 || argc>6) // If input arguments are not as much as meant to be, the algorithm ends indicating it's usage.
-	{
-		printf("[-] Usage: ./examine [max_collisions] [max_exec_time] [input_file] [Threads] [Processes] \nUse \"-1\": for no boundies \n");
-		if (argc==2) if (!strcmp(argv[1],"--help")) printf("max_collisions: Maximum number of collisions\nmax_exec_time: Maximum execution time\ninput_file: Filename to examine\nThreads: Number of threads to use\nProcesses: Number of Processes to use.\n" );
-		return 1;
-	}
-	return 0;
-}
-
-FILE *check_input_file(char *filename)
-{
-	FILE *temp = fopen(filename,"r");
-	if (!temp)
-	{
-		printf("[!] Input file does not exist.\nExiting...\n");
-		return NULL;
-	}
-	return temp;
-}
-
-long calc_time(struct timespec start, struct timespec end, char print_flag)	// Function that calculates the time elapsed between start - end
-{																			// Returns the time elapsed in seconds for program handling (2nd arg)
-	long interval_sec = end.tv_sec - start.tv_sec;							// print_flag is a flag that enables printing
-	long interval_nsec = end.tv_nsec - start.tv_nsec;
-	if(interval_nsec < 0)
-	{
-		interval_nsec += 1000000000;
-		interval_sec--;
-	}
-	if(print_flag == 1)
-	{
-		printf("[+] Main part of the program was being executed for :: %ld.%06ld :: sec)\n", interval_sec, interval_nsec);
-	}
-	return interval_sec;
-}
+int check_input(int argc,char *argv[]);
+FILE *check_input_file(char *filename);
+long calc_time(struct timespec start, struct timespec end, char print_flag);
 
 int main(int argc,char * argv[])
 {
@@ -87,4 +53,42 @@ int main(int argc,char * argv[])
 	printf("[+] Done! \n" );
 
 	return 0;
+}
+
+int check_input(int argc,char *argv[])
+{
+	if (argc<6 || argc>6) // If input arguments are not as much as meant to be, the algorithm ends indicating it's usage.
+	{
+		printf("[-] Usage: ./examine [max_collisions] [max_exec_time] [input_file] [Threads] [Processes] \nUse \"-1\": for no boundies \n");
+		if (argc==2) if (!strcmp(argv[1],"--help")) printf("max_collisions: Maximum number of collisions\nmax_exec_time: Maximum execution time\ninput_file: Filename to examine\nThreads: Number of threads to use\nProcesses: Number of Processes to use.\n" );
+		return 1;
+	}
+	return 0;
+}
+
+FILE *check_input_file(char *filename)
+{
+	FILE *temp = fopen(filename,"r");
+	if (!temp)
+	{
+		printf("[!] Input file does not exist.\nExiting...\n");
+		return NULL;
+	}
+	return temp;
+}
+
+long calc_time(struct timespec start, struct timespec end, char print_flag)	// Function that calculates the time elapsed between start - end
+{																			// Returns the time elapsed in seconds for program handling (2nd arg)
+	long interval_sec = end.tv_sec - start.tv_sec;							// print_flag is a flag that enables printing
+	long interval_nsec = end.tv_nsec - start.tv_nsec;
+	if(interval_nsec < 0)
+	{
+		interval_nsec += 1000000000;
+		interval_sec--;
+	}
+	if(print_flag == 1)
+	{
+		printf("[+] Main part of the program was being executed for :: %ld.%06ld :: sec)\n", interval_sec, interval_nsec);
+	}
+	return interval_sec;
 }
