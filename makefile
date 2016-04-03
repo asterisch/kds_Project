@@ -14,7 +14,7 @@ examine: examine.o
 generator.o: src/generator.c
 	$(CC) -c $(CFLAGS) $< -o $@
 
-examine.o: src/examine.c
+examine.o: src/examine_omp.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
