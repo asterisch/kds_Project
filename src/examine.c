@@ -14,32 +14,37 @@ int main(int argc,char * argv[])
 {
 	check_input(argc,argv);					// Simple argument number checking
 	int rank,agents,err=0;
-	long coords_total;
-	struct timespec start, end;				// Initialize vars needed for configuration
-	//int runtime = atoi(argv[2]);			// and basic calculations
-	//int threads_num = atoi(argv[4]);		// in order to get
-	char *file = argv[3];
-	//int proc_num = atoi(argv[5]);			// the desired output
-	long loop_count = calc_lines(file);
-	long time_elapsed = 0;
-	int coll = atoi(argv[1]);
-	if(coll != -1)
-	{
-		if(coll>loop_count)
-		{
-			printf("[!] Warning: Specified collisions to be tested exceed the ones in input file\n");
-			printf("[!] Setting the number of collisions to the maximum (taken from input file)\n");
-		}
-		else
-		{
-			loop_count = coll;
-		}
-	}
-	clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
+	long coords_total,loop_count,time_elapsed;
 	if(!MPI_Init(&argc,&argv))
 	{
-			MPI_Comm_size(MPI_COMM_WORLD,&agents); // Initialize OpenMPI constants
-			MPI_Comm_rank(MPI_COMM_WORLD,&rank); // world size and rank numbers
+		MPI_Comm_size(MPI_COMM_WORLD,&agents); // Initialize OpenMPI constants
+		MPI_Comm_rank(MPI_COMM_WORLD,&rank); // world size and rank numbers
+		struct timespec start, end;				// Initialize vars needed for configuration
+		//int runtime = atoi(argv[2]);			// and basic calculations
+		//int threads_num = atoi(argv[4]);		// in order to get
+		char *file = argv[3];
+		//int proc_num = atoi(argv[5]);			// the desired output
+		if (rank==0)
+		{
+			time_elapsed = 0;
+			loop_count = calc_lines(file);
+			clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
+			int coll = atoi(argv[1]);
+			if(coll != -1)
+			{
+				if(coll>loop_count)
+				{
+					printf("[!] Warning: Specified collisions to be tested exceed the ones in input file\n");
+					printf("[!] Setting the number of collisions to the maximum (taken from input file)\n");
+				}
+				else
+				{
+					loop_count = coll;
+				}
+			}
+			printf("Hi\n");
+		}
+		MPI_Bcast(&loop_count,1,MPI_LONG,0,MPI_COMM_WORLD);
 			long coords_within_lim = 0;
 			float coords_val[3] = {0, 0, 0};
 			FILE *input = fopen(file, "r");			// File desccriptor for every process
@@ -61,6 +66,7 @@ int main(int argc,char * argv[])
 				}
 			}
 			fclose(input); //Close file of every process
+			printf("Rank %d found: %ld coords in limits\n",rank,coords_within_lim);
 			MPI_Reduce(&coords_within_lim,&coords_total,1,MPI_LONG,MPI_SUM,0,MPI_COMM_WORLD); //Sum all coordinates within limit of interest
 			if(rank==0)
 			{
