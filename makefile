@@ -9,7 +9,7 @@ generate: generator.o
 	mpirun generator datafile.txt 15000000
 
 examine: examine.o
-	$(CC) $(CFLAGS) src/examine.c -o examine
+	$(CC) $(CFLAGS) src/examine.c -fopenmp -o examine
 	mpirun $(RUNARGS) examine -1 -1 datafile.txt -1 -1
 
 generator.o: src/generator.c
