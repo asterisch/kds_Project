@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
+#include <omp.h>
+
 #define MIN_LIM 12.0
 #define MAX_LIM 30.0
 #define LSIZE 31 //Fixed line size in bytes
+
 void check_input(int argc,char *argv[]);
 long calc_time(struct timespec start, struct timespec end, char print_flag);
 long calc_lines(char *filename);
@@ -51,6 +54,20 @@ int main(int argc,char * argv[])
 					else
 					{
 						loop_count = coll;
+					}
+				}
+				if(threads_num != -1)
+				{
+					if(threads_num > omp_get_max_threads())
+					{
+						printf("[!] Warning: Specified threads exceed the number of available ones\n");
+						printf("[!] Setting the number of threads to the maximum available");
+						omp_set_dynamic(0);
+						omp_set_num_threads(omp_get_max_threads());
+					}
+					else
+					{
+						omp_set_num_threads(threads_num);
 					}
 				}
 			}
