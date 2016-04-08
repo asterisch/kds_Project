@@ -24,7 +24,7 @@ int main(int argc,char * argv[])
 		MPI_Comm_rank(MPI_COMM_WORLD,&rank); // world size and rank numbers
 		struct timespec start, end;				// Initialize vars needed for configuration
 		//int runtime = atoi(argv[2]);			// and basic calculations
-		//int threads_num = atoi(argv[4]);		// in order to get
+		int threads_num = atoi(argv[4]);		// in order to get
 		char *file = argv[3];
 		long coords_within_lim = 0;
 		int proc_num = atoi(argv[5]);			// the desired output
@@ -76,12 +76,14 @@ int main(int argc,char * argv[])
 			fseek(input,rank*loadperproc*LSIZE,SEEK_SET);  //Move the file position indicator of every process
 			if(rank==proc_num-1) loadperproc+=(loop_count%proc_num); //Increment load of last process so as to reach end-of-file manually
 			int i;
+			#pragma omp parallel for shared(loadperproc, coords_within_lim, input) private(coords_val, i) schedule(dynamic)
 			for(i=0; i<loadperproc; i++)					// The main loop of the program
 			{
 				fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
 				if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
 				{
-						coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+					#pragma omp atomic
+					coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
 				}
 			}
 			fclose(input); //Close file of every process
@@ -125,7 +127,7 @@ long calc_time(struct timespec start, struct timespec end, char print_flag)	// F
 	}
 	if(print_flag == 1)
 	{
-		printf("[+] Main part of the program was being executed for :: %ld.%06ld :: sec)\n", interval_sec, interval_nsec);
+		printf("[+] Main part of the program was being executed for :: %ld.%06ld :: sec\n", interval_sec, interval_nsec);
 	}
 	return interval_sec;
 }
