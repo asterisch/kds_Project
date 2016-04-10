@@ -73,7 +73,11 @@ int main(int argc,char * argv[])
 						omp_set_num_threads(threads_num);
 					}
 				}
-				clock_gettime(CLOCK_MONOTONIC, &start);		// Initialize time calculation
+				else
+				{
+					threads_num=omp_get_max_threads();
+				}
+				clock_gettime(CLOCK_MONOTONIC, &start);										// Initialize time calculation
 			}
 			MPI_Bcast(&loop_count,1,MPI_LONG,0,MPI_COMM_WORLD);					// Sent only the necessary data
 			MPI_Bcast(&threads_num,1,MPI_LONG,0,MPI_COMM_WORLD);				// to other processes
@@ -84,7 +88,7 @@ int main(int argc,char * argv[])
 				loadperproc+=(loop_count%proc_num); 											//Increment load of last process so as to reach end-of-file manually
 			}
 			int i;
-			#pragma omp parallel for shared(loadperproc, coords_within_lim, input) private(coords_val, i) schedule(static)
+			#pragma omp parallel for shared(loadperproc, coords_within_lim, input) private(coords_val, i) schedule(guided,loadperproc/threads_num)
 			for(i=0; i<loadperproc; i++)																// The main loop of the program
 			{
 				fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
@@ -104,6 +108,7 @@ int main(int argc,char * argv[])
 			time_elapsed = calc_time(start, end, 1);											// Calculate the time elapsed
 			printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, coords_total, loop_count/time_elapsed);
 			printf("[+] Total Processes: %d\n",proc_num );
+			printf("[+] Threads: %d\n",threads_num );
 		}
 		MPI_Finalize();
 	}
