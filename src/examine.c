@@ -4,6 +4,9 @@
 #include <string.h>
 #include <mpi.h>
 #include <omp.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define MIN_LIM 12.0
 #define MAX_LIM 30.0
@@ -11,13 +14,13 @@
 
 void check_input(int argc,char *argv[]);
 long calc_time(struct timespec start, struct timespec end, char print_flag);
-long calc_lines(char *filename);
+long calc_bytes(char *filename);
 
 int main(int argc,char * argv[])
 {
 	check_input(argc,argv);												// Simple argument number checking.
 	int rank,agents,err=0; 												// Declaration of variables
-	long coords_total,loop_count,time_elapsed;		// used independendtly on processes.
+	long coords_total,total_within,byte_count,time_elapsed,total;		// used independendtly on processes.
 	struct timespec start, end; 									// Variables used for time calculation.
 	if(!MPI_Init(&argc,&argv))
 	{
@@ -28,12 +31,6 @@ int main(int argc,char * argv[])
 		int threads_num = atoi(argv[4]);
 		char *file = argv[3];
 		long coords_within_lim = 0;
-		FILE *input = fopen(file, "r");					// File desccriptor for every process
-		if(!input)
-		{
-				if(rank==0)printf("[!] Input file does not exist.\nExiting...\n");
-				MPI_Finalize();exit(3);
-		}
 		int proc_num = atoi(argv[5]);						// Define and handle
 		if (proc_num>agents || proc_num==-1 )		// number of processes argument
 		{
@@ -45,68 +42,105 @@ int main(int argc,char * argv[])
 			if (rank==0) 													// Operations to be done only from 1 process
 			{																			// to avoid	redundant delays
 				time_elapsed = 0;
-				loop_count = calc_lines(file);						// Count the lines of input file
 				int coll = atoi(argv[1]);
-				if(coll != -1)													// Handle max_collisions argument
+				// Handle max_collisions argument
+				if(coll==-1)
 				{
-					if(coll>loop_count)
-					{
-						printf("[!] Warning: Specified collisions to be tested exceed the ones in input file\n");
-						printf("[!] Setting the number of collisions to the maximum (taken from input file)\n");
-					}
-					else
-					{
-						loop_count = coll;
-					}
-				}
-				if(threads_num != -1)										// Handle max_threads argument
-				{
-					if(threads_num > omp_get_max_threads())
-					{
-						printf("[!] Warning: Specified threads exceed the number of available ones\n");
-						printf("[!] Setting the number of threads to the maximum available");
-						omp_set_dynamic(0);
-						omp_set_num_threads(omp_get_max_threads());
-					}
-					else
-					{
-						omp_set_num_threads(threads_num);
-					}
+					printf("[!] Setting the number of collisions to the maximum (taken from input file)\n");
+					byte_count = calc_bytes(file);						// Count the lines of input file
 				}
 				else
 				{
+					byte_count = coll*LSIZE;
+				}
+				if(threads_num > omp_get_max_threads() || threads_num==-1)
+				{
+					printf("[!] Setting the number of threads to the maximum available\n");
+					omp_set_dynamic(0);
+					omp_set_num_threads(omp_get_max_threads());
 					threads_num=omp_get_max_threads();
+				}
+				else
+				{
+					omp_set_dynamic(0);
+					omp_set_num_threads(threads_num);
 				}
 				clock_gettime(CLOCK_MONOTONIC, &start);										// Initialize time calculation
 			}
-			MPI_Bcast(&loop_count,1,MPI_LONG,0,MPI_COMM_WORLD);					// Sent only the necessary data
+			MPI_Bcast(&byte_count,1,MPI_LONG,0,MPI_COMM_WORLD);					// Sent only the necessary data
 			MPI_Bcast(&threads_num,1,MPI_LONG,0,MPI_COMM_WORLD);				// to other processes
-			long loadperproc=loop_count/proc_num;												//Asign corresponding load at every process
-			fseek(input,rank*loadperproc*LSIZE,SEEK_SET); 						 	//Move the file position indicator of every process
-			if(rank==proc_num-1)
+			char *fromfile;
+			int input = open(file,O_RDONLY,S_IREAD);			// File opening
+			if(input==-1)
 			{
-				loadperproc+=(loop_count%proc_num); 											//Increment load of last process so as to reach end-of-file manually
+				printf("[!] Input file does not exist.\nExiting...\n");
+				MPI_Finalize();
 			}
-			int i;
-			#pragma omp parallel for shared(loadperproc, coords_within_lim, input) private(coords_val, i) schedule(guided,loadperproc/threads_num)
-			for(i=0; i<loadperproc; i++)																// The main loop of the program
+			long totallines=byte_count/LSIZE;//aprox 10Mb per process
+			long chunk=totallines/10;
+			long loop_count=totallines/chunk;
+			long offset;
+			long linesperproc=chunk/proc_num;
+			long finale=0;
+			if (rank==proc_num-1) linesperproc+=chunk%proc_num;
+			fromfile=malloc(linesperproc*LSIZE);
+			int k;
+			coords_within_lim=0;
+			total=0;
+		for (k=0;k<loop_count;k++)
+		{
+			offset=rank*(chunk/proc_num)*LSIZE+finale*LSIZE;
+			if(rank==proc_num-1 )
 			{
-				fscanf(input, "%f %f %f", &coords_val[0], &coords_val[1], &coords_val[2]);
-				if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
-				{
-					#pragma omp atomic										// So as threads do not mess up the values
-					coords_within_lim++;									// If the current coordinate is within the accepted limits,
-				}																				// update the number of accepted coordinates
+				finale+=(chunk/proc_num)*(proc_num-1)+linesperproc;
 			}
-			fclose(input); 														// Close file of every process
-		//	printf("Rank %d found: %ld coords in limits\n",rank,coords_within_lim);
+			long max_mem=linesperproc*LSIZE;
+			pread(input,fromfile,max_mem,offset);//read max_mem bytes from file and store to variable
+			char *threadarray;
+			#pragma omp parallel shared(fromfile,input) private(threadarray,coords_val) num_threads(threads_num)
+			{
+					int j,i;
+					long linesperthread=linesperproc/threads_num;						//lines per thread
+					long thesi=omp_get_thread_num()*linesperthread*LSIZE;				//from where every thread starts processing
+					if (omp_get_thread_num()==threads_num-1) linesperthread+=linesperproc%threads_num;
+					threadarray=&fromfile[thesi];
+					for(j=0;j<linesperthread*LSIZE;j+=LSIZE)
+					{
+						for(i=0;i<3;i++)
+						{
+							int w;char temp[9];
+							for (w=0;w<9;w++)
+							{
+								temp[w]=threadarray[j+i*10+w];
+							}
+							coords_val[i]=atof(temp);
+						}
+
+						if(coords_val[0] >= MIN_LIM && coords_val[0] <= MAX_LIM && coords_val[1] >= MIN_LIM && coords_val[1] <= MAX_LIM && coords_val[2] >= MIN_LIM && coords_val[2] <= MAX_LIM)
+						{
+							#pragma omp critical
+							coords_within_lim++;		// If the current coordinate is within the accepted limits, update the number of accepted coordinates
+						}
+					 #pragma omp atomic
+					 total++;
+
+				}
+					#pragma omp barrier
+			}
+			#pragma omp barrier
+			MPI_Barrier(MPI_COMM_WORLD);
+		 MPI_Bcast(&finale,1,MPI_LONG,proc_num-1,MPI_COMM_WORLD);
 		}
-		MPI_Reduce(&coords_within_lim,&coords_total,1,MPI_LONG,MPI_SUM,0,MPI_COMM_WORLD); //Sum all coordinates within limit of interest
+				close(input);
+				free(fromfile);
+		}
+		MPI_Reduce(&coords_within_lim,&total_within,1,MPI_LONG,MPI_SUM,0,MPI_COMM_WORLD); //Sum all coordinates within limit of interest
+		MPI_Reduce(&total,&coords_total,1,MPI_LONG,MPI_SUM,0,MPI_COMM_WORLD);
 		if(rank==0)
 		{
-			clock_gettime(CLOCK_MONOTONIC, &end);													// Stop the timer
-			time_elapsed = calc_time(start, end, 1);											// Calculate the time elapsed
-			printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, coords_total, loop_count/time_elapsed);
+			clock_gettime(CLOCK_MONOTONIC, &end);		// Stop the timer
+			time_elapsed = calc_time(start, end, 1);	// Calculate the time elapsed
+			printf("[+] %ld coordinates have been read\n[+] %ld cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n",coords_total, total_within,coords_total/time_elapsed);
 			printf("[+] Total Processes: %d\n",proc_num );
 			printf("[+] Threads: %d\n",threads_num );
 		}
@@ -145,12 +179,12 @@ long calc_time(struct timespec start, struct timespec end, char print_flag)	// F
 	return interval_sec;
 }
 
-long calc_lines(char *filename) 																						// Calculates the lines of input file
+long calc_bytes(char *filename) 																						// Calculates the lines of input file
 {
 	FILE *file=fopen(filename,"r");
 	fseek(file,0L,SEEK_END);															//set file position indicator right to the end-of-file
-	long lines=ftell(file);																//store the number of bytes since the beginning of the file
+	long bytes=ftell(file);																//store the number of bytes since the beginning of the file
 	fseek(file,0L,SEEK_SET);
 	fclose(file);
-	return lines/31;																			//return lines count of the file
+	return bytes;																			//return lines count of the file
 }

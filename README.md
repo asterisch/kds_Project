@@ -1,2 +1,2 @@
 # kds_project_1
-Parallel project 1
+This is a new version of Parallel Project 1
