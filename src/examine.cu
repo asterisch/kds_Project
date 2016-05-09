@@ -13,15 +13,17 @@ long calc_lines(char *filename);
 
 int main(int argc,char * argv[])
 {
-  check_input(argc,argv);
-  char *filename=argv[3];
+  check_input(argc,argv);             // Check cmd inputs
+  char *filename=argv[3];             // Variable initialization
   int coll = atoi(argv[1]);
   int exec_time=atoi(argv[2]);
   int threads=atoi(argv[4]);
   int BLOCKSIZE = atoi(argv[5]);
   long loop_count;
   loop_count =calc_lines(filename);						// Count the lines of input file
-  FILE *input=fopen(filename,"r");
+  FILE *input=fopen(filename,"r");                        // Open file with file descriptor
+  struct cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop,0);                       // Get gpu's properties information
   if(coll != -1)													// Handle max_collisions argument
   {
     if(coll>loop_count)
@@ -31,15 +33,25 @@ int main(int argc,char * argv[])
     }
     else
     {
+      if (coll<0) return 1;
       loop_count = coll;
     }
   }
-  if (BLOCKSIZE==-1)
+  if (BLOCKSIZE==-1)                      // Handle blocksize argument
   {
-      BLOCKSIZE=256;
+      BLOCKSIZE=512;                      // A default value
   }
-  if (threads!=-1)
+  else
   {
+    if (BLOCKSIZE%prop.warpSize!=0 || BLOCKSIZE<=0)
+    {
+      printf("[-]Block_size must be a positive multiple of gpu's warp_size %d \n",prop.warpSize );
+      return 5;
+    }
+  }
+  if (threads!=-1)                        // Handle threads argument
+  {
+    if (threads<=0) return 4;
     if (threads%BLOCKSIZE!=0)
     {
       threads=(threads/BLOCKSIZE)*BLOCKSIZE;
@@ -47,57 +59,63 @@ int main(int argc,char * argv[])
   }
   else
   {
-    struct cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop,0);
-    threads=prop.maxThreadsPerMultiProcessor;
+    threads=prop.maxThreadsPerMultiProcessor*prop.multiProcessorCount;
   }
-  printf("[+] Using %d GPU-Threads with BlockSize %d\n",threads,BLOCKSIZE );
+  // Print some information [ Usefull for debugging ]
+  printf("[+] GPU-model: %s\tTotal GPU memory %ld MB \n",prop.name,prop.totalGlobalMem/(1024*1024) );
+  printf("[!] You are trying to allocate %ld MBs of memmory on CPU-RAM and GPU-GlobalMem\n",threads*3*sizeof(float)/(1024*1024) );
+  printf("[+] Launching %d GPU-Threads with BlockSize %d\n",threads,BLOCKSIZE );
+  // Initialize CUDA WallClock-time counters as events
   cudaEvent_t start,stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
 
-  dim3 blockSize(BLOCKSIZE);
-  dim3 gridSize(threads/BLOCKSIZE);
-  float *h_coordinates=(float * )malloc(3*threads*sizeof(float));
+  dim3 blockSize(BLOCKSIZE);              // Declare CUDA Block size explicitly
+  dim3 gridSize(threads/BLOCKSIZE);       // Declare CUDA Grid size explicitly
+  float *h_coordinates=(float * )malloc(3*threads*sizeof(float));    // allocate Host memmory for elements to be read from file
   float *d_coordinates;
-  int *d_coords_within,*h_coords_within=(int*)malloc(sizeof(int));
+  int *d_coords_within,*h_coords_within=(int*)malloc(sizeof(int));    // allocate Host memmory for the counter of coordinates in area of interest
   *h_coords_within=0;
-  cudaMalloc(&d_coordinates,3*threads*sizeof(float));
-  cudaMalloc(&d_coords_within,sizeof(int));
-  cudaMemcpy(d_coords_within,h_coords_within,sizeof(int),cudaMemcpyHostToDevice);
+                                                          // Allocate memmory on CUDA capable Device for:
+  cudaMalloc(&d_coordinates,3*threads*sizeof(float));     // input file's coordinates
+  cudaMalloc(&d_coords_within,sizeof(int));               // coordinates counter
+
+  cudaMemcpy(d_coords_within,h_coords_within,sizeof(int),cudaMemcpyHostToDevice);   // Initialize the value of cuounter on Device
   int i,j=0;
   float time_elapsed = 0;
   printf("[+] Working...\n" );
   cudaEventRecord(start);           // Starting time reference
-  while(j<loop_count && (exec_time==-1?1:time_elapsed<exec_time))
+  while(j<loop_count && (exec_time==-1?1:time_elapsed<exec_time))               // Main loop of the programm
   {
     if (j+threads>loop_count)
     {
       threads=loop_count-j;
       cudaFree(d_coordinates);
       cudaMalloc(&d_coordinates,3*threads*sizeof(float));
-
     }
     for(i=0;i<threads;i++)
     {
-      fscanf(input,"%f %f %f",&h_coordinates[i*3],&h_coordinates[i*3+1],&h_coordinates[i*3+2]);
+      fscanf(input,"%f %f %f",&h_coordinates[i*3],&h_coordinates[i*3+1],&h_coordinates[i*3+2]);   // Read cooordinates from file
     }
-    cudaMemcpy(d_coordinates,h_coordinates,3*threads*sizeof(float),cudaMemcpyHostToDevice);
-    examine<<<gridSize,blockSize>>>(d_coordinates,d_coords_within,3*threads);
+    cudaMemcpy(d_coordinates,h_coordinates,3*threads*sizeof(float),cudaMemcpyHostToDevice);       // Copy read cooordinates on Device
+    examine<<<gridSize,blockSize>>>(d_coordinates,d_coords_within,3*threads);                     // Launch gpu kernel for calculations
     cudaEventRecord(stop);                               // Stop time reference
     cudaEventSynchronize(stop);                         // Block CPU until "stop" event is recorded
     cudaEventElapsedTime(&time_elapsed, start, stop);  // Calculate the time elapsed in milliseconds
     time_elapsed=time_elapsed/1000;                    // Convert milliseconds to seconds
     j+=threads;
   }
+  // Destroy CUDA timers
   cudaEventDestroy(start);
   cudaEventDestroy(stop);
-  cudaMemcpy(h_coords_within,d_coords_within,sizeof(int),cudaMemcpyDeviceToHost);
-  //Printing results
-  loop_count=j;
-  printf("[+] Main part of the program was being executed for :: %.3f :: sec)\n", time_elapsed);
-  printf("[+] %d coordinates have been read\n[+] %d cooordinates were inside the area of interest\n[+] %d coordinates read per second\n", loop_count, *h_coords_within, (time_elapsed<=0?loop_count:loop_count/(int)time_elapsed));
 
+  cudaMemcpy(h_coords_within,d_coords_within,sizeof(int),cudaMemcpyDeviceToHost);   // Copy results from Device to Host
+
+  //Printing results
+  printf("[+] Main part of the program was being executed for :: %.3f :: sec)\n", time_elapsed);
+  printf("[+] %ld coordinates have been analyzed\n[+] %d cooordinates were inside the area of interest\n[+] %ld coordinates read per second\n", loop_count, *h_coords_within, (time_elapsed<1?loop_count:loop_count/(int)time_elapsed));
+
+  // Free Host and Device memory
   cudaFree(d_coordinates);
   cudaFree(d_coords_within);
   fclose(input);
@@ -108,15 +126,14 @@ int main(int argc,char * argv[])
 }
 __global__ void examine(float *d_coordinates,int *d_coords_within,int d_lines)
 {
-    int index=blockIdx.x*3*blockDim.x+3*threadIdx.x;
-    float coord1=d_coordinates[index],coord2=d_coordinates[index+1],coord3=d_coordinates[index+2];
+    int index=blockIdx.x*3*blockDim.x+3*threadIdx.x;                                                 // find the index of starting element for each thread on each block
+    float coord1=d_coordinates[index],coord2=d_coordinates[index+1],coord3=d_coordinates[index+2];  // Copy cooordinates from GPU's global memory to thread's local memory
     if(index>=d_lines) return;
     if(coord1 >= MIN_LIM && coord1 <= MAX_LIM && coord2 >= MIN_LIM && coord2 <= MAX_LIM && coord3 >= MIN_LIM && coord3 <= MAX_LIM)
     {
-              atomicAdd((unsigned int*)d_coords_within,1); // So as threads do not mess up the values     								// If the current coordinate is within the accepted limits,
+      	                                                       // If the current coordinate is within the accepted limits,
+              atomicAdd((unsigned int*)d_coords_within,1);    // So as threads do not mess up the values
     }
-
-
 }
 void check_input(int argc,char *argv[]) 																		// Handle number of arguments errors and show usage
 {
@@ -125,9 +142,9 @@ void check_input(int argc,char *argv[]) 																		// Handle number of ar
 		printf("[-] Usage: ./examine [max_collisions] [max_exec_time] [input_file] [Threads] [1D_blockSize]\nUse \"-1\": for no boundies \n");
 		if (argc==2) if (!strcmp(argv[1],"--help"))
     {
-      printf("max_collisions: Maximum number of collisions\nmax_exec_time: Maximum execution time\ninput_file: Filename to examine\nThreads: Number of gpu-threads to use\n1D_blocksize: gpu-blocksize to use" );
+      printf("max_collisions: Maximum number of collisions\nmax_exec_time: Maximum execution time\ninput_file: Filename to examine\nThreads: Number of gpu-threads to use / # Rows in memmory\n1D_blocksize: gpu-blocksize to use" );
       printf("\t ======Usefull info!======\n");
-      printf("1) 1D_blockSize must be a multiple of 32. (or whatever warp_size is supported by your GPU)\n2) Threads must be a multiple of blockSize\n" );
+      printf("1) 1D_blockSize must be a multiple of 32. (or whatever warp_size is supported by your GPU)\n2) Threads should be a multiple of blockSize\n 3)These 2 parameters are important for performance\n" );
     }
 		exit(2);
 	}
